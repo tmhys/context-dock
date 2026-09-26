@@ -51,7 +51,7 @@
     return {
       id: m.id, label: m.label, color: m.color,
       all: m.all || [], none: m.none || [],
-      hours: m.hours || null, apps: m.apps
+      hours: m.hours || null, days: m.days || null, apps: m.apps
     };
   }
 
@@ -86,17 +86,21 @@
       });
       if (m.hours && (m.hours.length !== 2 || m.hours.some(function (h) { return !(h >= 0 && h <= 24); })))
         errs.push(name + ": 時間帯は 0〜24 時で指定します");
+      if (m.days && (!m.days.length || m.days.some(function (d) { return !(d >= 0 && d <= 6 && d % 1 === 0); })))
+        errs.push(name + ": 曜日は1つ以上選びます");
     });
     var last = (cfg.modes || [])[cfg.modes.length - 1];
-    if (last && ((last.all || []).length || (last.none || []).length || last.hours))
+    if (last && ((last.all || []).length || (last.none || []).length || last.hours || last.days))
       errs.push("いちばん下のモードは条件なしにします（どれにも当てはまらないとき用）");
     return errs;
   }
 
   // ------------------------------------------------------------ 判定（Tasker と同じ規則）
 
-  /** Tasker の ctx判定 と同じ規則でモードを選ぶ。エディタの「試す」用。 */
-  function judge(modes, on, hour) {
+  /** Tasker の ctx判定 と同じ規則でモードを選ぶ。エディタの「試す」用。
+   *  day は曜日（0=日〜6=土）。省くと曜日の条件は見ない。 */
+  function judge(modes, on, hour, day) {
+    function inDays(d) { return !d || day === undefined || d.indexOf(day) >= 0; }
     function inHours(r) {
       if (!r) return true;
       return r[0] <= r[1] ? (hour >= r[0] && hour < r[1]) : (hour >= r[0] || hour < r[1]);
@@ -105,7 +109,7 @@
       var m = modes[i];
       var ok = (m.all || []).every(function (f) { return on[f]; }) &&
                !(m.none || []).some(function (f) { return on[f]; });
-      if (ok && inHours(m.hours)) return m;
+      if (ok && inHours(m.hours) && inDays(m.days)) return m;
     }
     return modes[modes.length - 1];
   }
@@ -162,6 +166,9 @@
     "var MODES = __MODES__;",
     "function flag(n) { return global('CTX_' + n) == '1'; }",
     "var h = parseInt(String(global('TIME')).split('.')[0], 10);",
+    // 曜日は端末の言語に左右されない JS の Date で取る（0=日〜6=土）。%DAYW は言語で表記が変わる
+    "var dw = new Date().getDay();",
+    "function inDays(d) { return !d || d.indexOf(dw) >= 0; }",
     "function inHours(r) {",
     "  if (!r) return true;",
     "  return r[0] <= r[1] ? (h >= r[0] && h < r[1]) : (h >= r[0] || h < r[1]);",
@@ -171,7 +178,7 @@
     "  var m = MODES[i], ok = true, j;",
     "  for (j = 0; j < m.all.length; j++) if (!flag(m.all[j])) ok = false;",
     "  for (j = 0; j < m.none.length; j++) if (flag(m.none[j])) ok = false;",
-    "  if (ok && inHours(m.hours)) { pick = m; break; }",
+    "  if (ok && inHours(m.hours) && inDays(m.days)) { pick = m; break; }",
     "}",
     "var disp = [pick.label + '|' + pick.color], targets = [];",
     "for (var k = 0; k < pick.apps.length; k++) {",

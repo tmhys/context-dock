@@ -136,6 +136,7 @@ dialog::backdrop{background:#000a}
         <div class="chips" id="simflags"></div>
         <div class="hour"><span class="mi" style="font-size:18px;color:var(--muted)">schedule</span>
           <input type="range" id="simhour" min="0" max="23" step="1" aria-label="時刻"><b id="simhourv"></b></div>
+        <div class="chips" id="simdays" role="group" aria-label="曜日"></div>
         <div class="verdict" id="verdict"></div>
       </div>
     </div>
@@ -235,7 +236,7 @@ dialog::backdrop{background:#000a}
   var COLORS = ["#FF6B1A","#FFD60A","#34C759","#64D2FF","#5AC8FA","#8E8CFF","#BF5AF2","#FF6961","#FF9F0A","#A1A1A6"];
   var FLAG_HINT = { wifi: "SSID（2つ以上は / で区切る）", bt: "Bluetooth の表示名", calendar: "予定タイトル（* と / が使える）" };
 
-  var cfg = clone(DEFAULT), open = -1, sim = { on: {}, hour: new Date().getHours() };
+  var cfg = clone(DEFAULT), open = -1, sim = { on: {}, hour: new Date().getHours(), day: new Date().getDay() };
   var dirty = false;
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -243,10 +244,18 @@ dialog::backdrop{background:#000a}
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
   function flagLabel(k) { return (cfg.flags[k] && cfg.flags[k].label) || k; }
   function isLast(i) { return i === cfg.modes.length - 1; }
+  var DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
+  function daysText(d) {
+    var s = d.slice().sort().join(",");
+    if (s === "1,2,3,4,5") return "平日";
+    if (s === "0,6") return "土日";
+    return d.slice().sort().map(function (x) { return DAY_NAMES[x]; }).join("");
+  }
   function condText(m, i) {
     if (isLast(i)) return "どれにも当てはまらないとき";
     var parts = (m.all || []).map(flagLabel).concat((m.none || []).map(function (k) { return flagLabel(k) + "でない"; }));
     if (m.hours) parts.push(m.hours[0] + "〜" + m.hours[1] + "時");
+    if (m.days) parts.push(daysText(m.days));
     return parts.join("・") || "条件なし";
   }
 
@@ -267,11 +276,14 @@ dialog::backdrop{background:#000a}
     }).join("");
     $("simhour").value = sim.hour;
     $("simhourv").textContent = String(sim.hour).padStart(2, "0") + ":00";
+    $("simdays").innerHTML = DAY_NAMES.map(function (n, d) {
+      return '<button type="button" class="chip" data-simday="' + d + '" aria-pressed="' + (sim.day === d) + '">' + n + "</button>";
+    }).join("");
     var usable = G.taskerModes(cfg);
     if (!usable.length) return;
     var on = {};
     Object.keys(sim.on).forEach(function (k) { if (sim.on[k] && k in active) on[k] = true; });
-    var m = G.judge(usable, on, sim.hour);
+    var m = G.judge(usable, on, sim.hour, sim.day);
     renderWidget(m);
     var idx = cfg.modes.findIndex(function (x) { return x.id === m.id; });
     $("verdict").innerHTML = "この状況では <b>" + h(m.label) + "</b>（" + (idx + 1) + "番目のモード）";
@@ -304,6 +316,10 @@ dialog::backdrop{background:#000a}
         }).join("") +
         '<div class="cond"><span>時間帯</span><label class="row" style="gap:6px;flex:none"><input type="checkbox" data-hours ' + (m.hours ? "checked" : "") + '> 指定する</label></div>' +
         (m.hours ? '<div class="row" style="padding-left:1em"><select data-h="0">' + hourOpts(m.hours[0]) + '</select> 時から <select data-h="1">' + hourOpts(m.hours[1]) + "</select> 時まで</div>" : "") +
+        '<div class="cond"><span>曜日</span><label class="row" style="gap:6px;flex:none"><input type="checkbox" data-days ' + (m.days ? "checked" : "") + '> 指定する</label></div>' +
+        (m.days ? '<div class="row" style="padding-left:1em;gap:6px">' + DAY_NAMES.map(function (n, d) {
+          return '<button type="button" class="chip" data-day="' + d + '" aria-pressed="' + (m.days.indexOf(d) >= 0) + '">' + n + "</button>";
+        }).join("") + '<button type="button" class="btn ghost" data-dayset="1,2,3,4,5">平日</button><button type="button" class="btn ghost" data-dayset="0,6">土日</button></div>' : "") +
         "</div></div>";
     }
     html += '<div><div class="muted" style="margin-bottom:6px">アプリ（左上 → 右上 → 左下 → 右下）</div><div class="apps4">' +
@@ -458,6 +474,7 @@ dialog::backdrop{background:#000a}
     if (!t) return;
     var modeEl = t.closest(".mode"), i = modeEl ? +modeEl.dataset.i : -1, m = cfg.modes[i];
     if (t.dataset.sim !== undefined) { sim.on[t.dataset.sim] = !sim.on[t.dataset.sim]; renderSim(); return; }
+    if (t.dataset.simday !== undefined) { sim.day = +t.dataset.simday; renderSim(); return; }
     if (t.hasAttribute("data-toggle")) { open = open === i ? -1 : i; renderModes(); renderSim(); return; }
     if (!m && !t.id) return;
     if (t.dataset.color) { m.color = t.dataset.color; renderModes(); changed(); return; }
@@ -468,6 +485,12 @@ dialog::backdrop{background:#000a}
       if (v) m[v].push(k);
       renderModes(); changed(); return;
     }
+    if (t.dataset.day !== undefined) {
+      var dd = +t.dataset.day, at = m.days.indexOf(dd);
+      if (at >= 0) m.days.splice(at, 1); else m.days.push(dd);
+      m.days.sort(); renderModes(); changed(); return;
+    }
+    if (t.dataset.dayset) { m.days = t.dataset.dayset.split(",").map(Number); renderModes(); changed(); return; }
     if (t.dataset.icon !== undefined) { openIcons(i, +t.dataset.icon); return; }
     if (t.dataset.move) {
       var j = i + +t.dataset.move;
@@ -491,6 +514,7 @@ dialog::backdrop{background:#000a}
       renderModes(); changed(); return;
     }
     if (t.hasAttribute("data-hours")) { m.hours = t.checked ? [21, 4] : undefined; if (!m.hours) delete m.hours; renderModes(); changed(); return; }
+    if (t.hasAttribute("data-days")) { if (t.checked) m.days = [1, 2, 3, 4, 5]; else delete m.days; renderModes(); changed(); return; }
     if (t.dataset.h !== undefined) { m.hours[+t.dataset.h] = +t.value; refreshSummary(i); changed(); return; }
   });
 
