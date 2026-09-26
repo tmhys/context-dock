@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Context Dock エディタ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Icons&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0a0a0b; --card:#161618; --card2:#1c1c1e; --tile:#2a2a2d; --line:#2c2c30;
+  --text:#ececee; --muted:#8e8e95; --dim:#5d5d64; --accent:#ff6b1a; --bad:#ff6961; --ok:#34c759;
+  --sans:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14.5px;line-height:1.6;margin:0;padding-inline:16px;padding-block:20px 80px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:22px;margin:0;font-weight:700}
+h2{font-size:16px;margin:0 0 10px;font-weight:700;display:flex;align-items:center;gap:8px}
+h2 small{font-weight:400;color:var(--muted);font-size:12px}
+p{margin:0 0 8px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.mi{font-family:"Material Icons";font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased;font-feature-settings:"liga"}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=number],select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
+input.mono{font-family:var(--mono);font-size:12.5px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.btn{background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:700}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad)}
+.btn[disabled]{opacity:.4;cursor:default}
+.iconbtn{background:transparent;border:1px solid var(--line);border-radius:8px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.iconbtn .mi{font-size:20px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--dim);display:inline-block}
+.status.ok i{background:var(--ok)} .status.busy i{background:#ffd60a}
+
+/* 試す */
+.sim{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+@media (max-width:540px){.sim{grid-template-columns:1fr;justify-items:center}}
+.widget{width:180px;height:180px;background:#1c1c1e;border-radius:26px;padding:13px;display:flex;flex-direction:column;gap:9px;border:1px solid #242428}
+.whead{display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);height:13px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--m);flex:none}
+.grid4{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:1}
+.tile{background:#2a2a2d;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0}
+.tile .mi{color:var(--m);font-size:25px}
+.tile small{font-size:9px;color:#c7c7cc;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%}
+.simctl{display:flex;flex-direction:column;gap:10px;width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--muted)}
+.chip[aria-pressed=true]{background:var(--tile);color:var(--text);border-color:var(--text)}
+.chip.off{opacity:.45}
+.hour{display:flex;align-items:center;gap:10px;font-size:13px}
+.hour input{flex:1}
+.hour b{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:4.5ch;text-align:right}
+.verdict{font-size:13px;color:var(--muted)}
+.verdict b{color:var(--text)}
+
+/* モード一覧 */
+.modes{display:flex;flex-direction:column;gap:8px}
+.mode{background:var(--card);border:1px solid var(--line);border-radius:12px}
+.mode.cur{border-color:var(--m)}
+.msum{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;width:100%;background:none;border:0;text-align:left}
+.msum .n{font-family:var(--mono);font-size:11px;color:var(--dim);width:1.6em;font-variant-numeric:tabular-nums}
+.msum .name{font-weight:700;font-size:14px;white-space:nowrap}
+.msum .cond{font-size:12px;color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msum .apps{display:flex;gap:2px;color:var(--m)}
+.msum .apps .mi{font-size:17px}
+.mbody{border-top:1px solid var(--line);padding:14px 12px;display:flex;flex-direction:column;gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;background:var(--c)}
+.sw[aria-pressed=true]{border-color:var(--text)}
+.conds{display:flex;flex-direction:column;gap:6px}
+.cond{display:flex;align-items:center;gap:8px;font-size:13px}
+.cond span{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:4px 10px;font-size:12px;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--tile);color:var(--text)}
+.apps4{display:flex;flex-direction:column;gap:8px}
+.app{display:grid;grid-template-columns:40px 1fr 1.3fr;gap:6px;align-items:center}
+.app .iconpick{width:40px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--m)}
+.app .iconpick .mi{font-size:22px}
+.muted{color:var(--muted);font-size:12px}
+.fallback{font-size:12px;color:var(--muted);background:var(--bg);border-radius:8px;padding:8px 10px}
+
+/* 条件 */
+.flags{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;gap:12px}
+.flag{display:grid;grid-template-columns:5.5em 1fr;gap:8px;align-items:center}
+.flag .k{font-size:13px}
+.flag .k small{display:block;color:var(--dim);font-size:10.5px;font-family:var(--mono)}
+.cal{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cal>input{grid-column:1/-1}
+
+/* 出力 */
+.out{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;gap:10px}
+.errs{color:var(--bad);font-size:13px;margin:0;padding-left:1.2em}
+ol.steps{margin:0;padding-left:1.3em;font-size:13px;color:#c9c9ce}
+ol.steps li{margin-bottom:3px}
+.msg{font-size:13px;min-height:1.4em}
+.msg.bad{color:var(--bad)} .msg.ok{color:var(--ok)}
+
+/* アイコン選択 */
+dialog{background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:14px;width:min(92vw,440px);max-height:80vh}
+dialog::backdrop{background:#000a}
+.icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;max-height:50vh;overflow:auto;margin-top:10px}
+.icons button{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 2px 4px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.icons button small{font-size:8.5px;color:var(--dim);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="row" style="justify-content:space-between">
+    <div>
+      <div class="eyebrow">Tasker × KWGT</div>
+      <h1>Context Dock エディタ</h1>
+    </div>
+    <div class="status" id="status"><i></i><span>読み込み中</span></div>
+  </header>
+
+  <section>
+    <h2>試す <small>状況を選ぶと、どのモードになるか分かる</small></h2>
+    <div class="sim">
+      <div class="widget" id="widget"></div>
+      <div class="simctl">
+        <div class="chips" id="simflags"></div>
+        <div class="hour"><span class="mi" style="font-size:18px;color:var(--muted)">schedule</span>
+          <input type="range" id="simhour" min="0" max="23" step="1" aria-label="時刻"><b id="simhourv"></b></div>
+        <div class="verdict" id="verdict"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>モード <small>上ほど優先。タップで編集</small></h2>
+    <div class="modes" id="modes"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="addmode" type="button"><span class="mi" style="font-size:18px">add</span>モードを追加</button></div>
+  </section>
+
+  <section>
+    <h2>条件 <small>空欄の条件は使われない</small></h2>
+    <div class="flags" id="flags"></div>
+  </section>
+
+  <section>
+    <h2>保存と反映</h2>
+    <div class="out">
+      <ul class="errs" id="errs"></ul>
+      <div class="row">
+        <button class="btn primary" id="push" type="button"><span class="mi" style="font-size:18px">cloud_upload</span>GitHub に保存</button>
+        <button class="btn ghost" id="reload" type="button">GitHub から読み直す</button>
+      </div>
+      <div class="msg" id="msg"></div>
+      <ol class="steps">
+        <li>「GitHub に保存」すると、1分ほどで Actions が Tasker の XML と KWGT のプリセットを作り直す</li>
+        <li>Tasker で <b>ContextDock 更新</b> を実行 → <b>Tasker/</b> と <b>Kustom/widgets/</b> に最新が入る</li>
+        <li>Tasker：古い ContextDock プロジェクトを削除 → 家アイコン長押し → Import Project</li>
+        <li>KWGT：アプリやモードを変えたときだけ、ウィジェットをタップして Context Dock を選び直す</li>
+      </ol>
+      <details>
+        <summary class="muted">GitHub を使わずにファイルだけ作る</summary>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="dlxml" type="button">ContextDock.prj.xml</button>
+          <button class="btn" id="dlkwgt" type="button">ContextDock.kwgt</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>GitHub の接続</h2>
+    <div class="flags">
+      <label class="f">トークン（tmhys/my_apps の Contents: Read and write）
+        <input type="password" id="token" autocomplete="off" spellcheck="false"></label>
+      <div class="row">
+        <button class="btn" id="saveToken" type="button">保存して読み込む</button>
+        <button class="btn ghost danger" id="forget" type="button">この端末から消す</button>
+      </div>
+      <p class="muted">トークンはこの端末のブラウザにだけ保存されます。設定は非公開の tmhys/my_apps（apps/context-dock/config.json）に入り、このページ（公開）には残りません。</p>
+    </div>
+  </section>
+</div>
+
+<dialog id="iconDlg" aria-label="アイコンを選ぶ">
+  <div class="row" style="justify-content:space-between"><b>アイコンを選ぶ</b><button class="iconbtn" id="iconClose" type="button" aria-label="閉じる"><span class="mi">close</span></button></div>
+  <input type="text" id="iconQ" placeholder="名前で絞り込み（英語）" style="margin-top:10px">
+  <div class="icons" id="icons"></div>
+</dialog>
+
+<script src="gen.js"></script>
+<script>
+(function () {
+  "use strict";
+  var G = window.ContextDockGen;
+  var DEFAULT = {"flags": {"HOME": {"label": "自宅", "type": "wifi", "ssid": ""}, "WORK": {"label": "職場", "type": "wifi", "ssid": ""}, "HEADSET": {"label": "イヤホン", "type": "bt", "name": ""}, "CAR": {"label": "車", "type": "bt", "name": ""}, "RUN": {"label": "ラン日", "type": "calendar", "title": "*🏃*/*走*/*ジョグ*", "early": 720, "late": 120}, "MATCH": {"label": "試合日", "type": "calendar", "title": "*⚽*/*サッカー*/*DAZN*", "early": 720, "late": 180}}, "modes": [{"id": "CAR", "label": "CAR", "color": "#5AC8FA", "all": ["CAR"], "apps": [["map", "マップ", "com.google.android.apps.maps"], ["music_note", "YT Music", "com.google.android.apps.youtube.music"], ["rss_feed", "PodPlayer", "com.tmhys.podplayer"], ["chat", "LINE", "jp.naver.line.android"]]}, {"id": "MATCH", "label": "MATCH DAY", "color": "#34C759", "all": ["MATCH"], "apps": [["live_tv", "DAZN", "com.dazn"], ["forum", "X", "com.twitter.android"], ["ondemand_video", "YouTube", "com.google.android.youtube"], ["music_note", "YT Music", "com.google.android.apps.youtube.music"]]}, {"id": "RUN", "label": "RUN DAY", "color": "#FF6B1A", "all": ["HEADSET", "RUN"], "apps": [["watch", "Mi Fitness", "com.xiaomi.wearable"], ["music_note", "YT Music", "com.google.android.apps.youtube.music"], ["rss_feed", "PodPlayer", "com.tmhys.podplayer"], ["map", "マップ", "com.google.android.apps.maps"]]}, {"id": "LISTEN", "label": "LISTEN", "color": "#BF5AF2", "all": ["HEADSET"], "apps": [["music_note", "YT Music", "com.google.android.apps.youtube.music"], ["rss_feed", "PodPlayer", "com.tmhys.podplayer"], ["school", "Anki", "com.ichi2.anki"], ["ondemand_video", "YouTube", "com.google.android.youtube"]]}, {"id": "NIGHT", "label": "NIGHT", "color": "#8E8CFF", "all": ["HOME"], "hours": [21, 4], "apps": [["school", "Anki", "com.ichi2.anki"], ["whatshot", "Duolingo", "com.duolingo"], ["lightbulb_outline", "Keep", "com.google.android.keep"], ["ondemand_video", "YouTube", "com.google.android.youtube"]]}, {"id": "MORNING", "label": "MORNING", "color": "#FFD60A", "all": ["HOME"], "hours": [4, 9], "apps": [["mail", "Gmail", "com.google.android.gm"], ["lightbulb_outline", "Keep", "com.google.android.keep"], ["rss_feed", "PodPlayer", "com.tmhys.podplayer"], ["school", "Anki", "com.ichi2.anki"]]}, {"id": "WORK", "label": "WORK", "color": "#64D2FF", "all": ["WORK"], "apps": [["mail", "Gmail", "com.google.android.gm"], ["lightbulb_outline", "Keep", "com.google.android.keep"], ["event", "カレンダー", "com.google.android.calendar"], ["school", "Anki", "com.ichi2.anki"]]}, {"id": "OUT", "label": "OUT", "color": "#FF9F0A", "none": ["HOME"], "apps": [["school", "Anki", "com.ichi2.anki"], ["rss_feed", "PodPlayer", "com.tmhys.podplayer"], ["map", "マップ", "com.google.android.apps.maps"], ["mail", "Gmail", "com.google.android.gm"]]}, {"id": "HOME", "label": "HOME", "color": "#A1A1A6", "apps": [["ondemand_video", "YouTube", "com.google.android.youtube"], ["live_tv", "DAZN", "com.dazn"], ["lightbulb_outline", "Keep", "com.google.android.keep"], ["mail", "Gmail", "com.google.android.gm"]]}]}; // GitHub から読むまでの見本（SSID などは空）
+
+  // KWGT 内蔵（旧 Material Icons）にある名前だけを並べる。Google Fonts の Material Icons と同じ名前。
+  var ICONS = ["music_note","headset","rss_feed","radio","mic","ondemand_video","live_tv","tv","movie","play_circle_filled",
+    "map","directions_run","directions_car","directions_walk","train","place","navigation","watch","fitness_center","pool",
+    "school","book","local_library","translate","whatshot","star","favorite","lightbulb_outline","note","edit",
+    "mail","chat","forum","message","phone","call","people","public","language","search",
+    "event","today","alarm","schedule","timer","check_circle","done_all","list","assignment","account_balance_wallet",
+    "shopping_cart","restaurant","local_cafe","local_bar","photo_camera","photo","image","camera_alt","settings","home",
+    "work","build","cloud","wb_sunny","sports_esports","videogame_asset","code","android","attach_money","savings"];
+
+  var APPS = [
+    ["music_note","YT Music","com.google.android.apps.youtube.music"],
+    ["ondemand_video","YouTube","com.google.android.youtube"],
+    ["live_tv","DAZN","com.dazn"],
+    ["forum","X","com.twitter.android"],
+    ["chat","LINE","jp.naver.line.android"],
+    ["mail","Gmail","com.google.android.gm"],
+    ["lightbulb_outline","Keep","com.google.android.keep"],
+    ["event","カレンダー","com.google.android.calendar"],
+    ["map","マップ","com.google.android.apps.maps"],
+    ["school","Anki","com.ichi2.anki"],
+    ["whatshot","Duolingo","com.duolingo"],
+    ["watch","Mi Fitness","com.xiaomi.wearable"],
+    ["public","Chrome","com.android.chrome"],
+    ["star","Claude","com.anthropic.claude"],
+    ["photo","フォト","com.google.android.apps.photos"],
+    ["rss_feed","PodPlayer","com.tmhys.podplayer"]
+  ];
+  var COLORS = ["#FF6B1A","#FFD60A","#34C759","#64D2FF","#5AC8FA","#8E8CFF","#BF5AF2","#FF6961","#FF9F0A","#A1A1A6"];
+  var FLAG_HINT = { wifi: "SSID（2つ以上は / で区切る）", bt: "Bluetooth の表示名", calendar: "予定タイトル（* と / が使える）" };
+
+  var cfg = clone(DEFAULT), open = -1, sim = { on: {}, hour: new Date().getHours() };
+  var dirty = false;
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function $(id) { return document.getElementById(id); }
+  function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+  function flagLabel(k) { return (cfg.flags[k] && cfg.flags[k].label) || k; }
+  function isLast(i) { return i === cfg.modes.length - 1; }
+  function condText(m, i) {
+    if (isLast(i)) return "どれにも当てはまらないとき";
+    var parts = (m.all || []).map(flagLabel).concat((m.none || []).map(function (k) { return flagLabel(k) + "でない"; }));
+    if (m.hours) parts.push(m.hours[0] + "〜" + m.hours[1] + "時");
+    return parts.join("・") || "条件なし";
+  }
+
+  // ---------------------------------------------------------------- 描画
+  function renderWidget(m) {
+    var w = $("widget");
+    w.style.setProperty("--m", m.color);
+    w.innerHTML = '<div class="whead"><span class="dot"></span><span>' + h(m.label) + '</span></div><div class="grid4">' +
+      m.apps.map(function (a) { return '<div class="tile"><span class="mi">' + h(a[0]) + '</span><small>' + h(a[1]) + '</small></div>'; }).join("") + "</div>";
+  }
+
+  function renderSim() {
+    var active = G.activeFlags(cfg);
+    $("simflags").innerHTML = Object.keys(cfg.flags).map(function (k) {
+      var off = !(k in active);
+      return '<button type="button" class="chip' + (off ? " off" : "") + '" data-sim="' + h(k) + '" aria-pressed="' + !!sim.on[k] + '"' +
+        (off ? ' title="条件が空欄なので Tasker では使われない"' : "") + ">" + h(flagLabel(k)) + "</button>";
+    }).join("");
+    $("simhour").value = sim.hour;
+    $("simhourv").textContent = String(sim.hour).padStart(2, "0") + ":00";
+    var usable = G.taskerModes(cfg);
+    if (!usable.length) return;
+    var on = {};
+    Object.keys(sim.on).forEach(function (k) { if (sim.on[k] && k in active) on[k] = true; });
+    var m = G.judge(usable, on, sim.hour);
+    renderWidget(m);
+    var idx = cfg.modes.findIndex(function (x) { return x.id === m.id; });
+    $("verdict").innerHTML = "この状況では <b>" + h(m.label) + "</b>（" + (idx + 1) + "番目のモード）";
+    document.querySelectorAll(".mode").forEach(function (el, i) { el.classList.toggle("cur", i === idx); });
+  }
+
+  function summaryHtml(m, i) {
+    return '<span class="n">' + (i + 1) + '</span><span class="dot"></span><span class="name">' + h(m.label) +
+      '</span><span class="cond">' + h(condText(m, i)) + '</span><span class="apps">' +
+      m.apps.map(function (a) { return '<span class="mi">' + h(a[0]) + "</span>"; }).join("") + "</span>";
+  }
+
+  function bodyHtml(m, i) {
+    var last = isLast(i);
+    var html = '<div class="grid2"><label class="f">モード名（ウィジェットの見出し）<input type="text" data-f="label" value="' + h(m.label) + '"></label>' +
+      '<label class="f">ID（英数字）<input type="text" class="mono" data-f="id" value="' + h(m.id) + '"></label></div>';
+    html += '<div><div class="muted" style="margin-bottom:6px">色</div><div class="swatches">' +
+      COLORS.map(function (c) { return '<button type="button" class="sw" style="--c:' + c + '" data-color="' + c + '" aria-pressed="' + (m.color.toUpperCase() === c) + '" aria-label="' + c + '"></button>'; }).join("") +
+      '<input type="text" class="mono" data-f="color" value="' + h(m.color) + '" style="width:7.5em"></div></div>';
+    if (last) {
+      html += '<div class="fallback">いちばん下のモードは「どれにも当てはまらないとき」用なので条件は付けられません。</div>';
+    } else {
+      html += '<div><div class="muted" style="margin-bottom:6px">条件（すべて満たすとこのモード）</div><div class="conds">' +
+        Object.keys(cfg.flags).map(function (k) {
+          var st = (m.all || []).indexOf(k) >= 0 ? "all" : (m.none || []).indexOf(k) >= 0 ? "none" : "";
+          return '<div class="cond"><span>' + h(flagLabel(k)) + '</span><span class="seg">' +
+            [["", "関係なし"], ["all", "のとき"], ["none", "でないとき"]].map(function (o) {
+              return '<button type="button" data-cond="' + h(k) + '" data-v="' + o[0] + '" aria-pressed="' + (st === o[0]) + '">' + o[1] + "</button>";
+            }).join("") + "</span></div>";
+        }).join("") +
+        '<div class="cond"><span>時間帯</span><label class="row" style="gap:6px;flex:none"><input type="checkbox" data-hours ' + (m.hours ? "checked" : "") + '> 指定する</label></div>' +
+        (m.hours ? '<div class="row" style="padding-left:1em"><select data-h="0">' + hourOpts(m.hours[0]) + '</select> 時から <select data-h="1">' + hourOpts(m.hours[1]) + "</select> 時まで</div>" : "") +
+        "</div></div>";
+    }
+    html += '<div><div class="muted" style="margin-bottom:6px">アプリ（左上 → 右上 → 左下 → 右下）</div><div class="apps4">' +
+      m.apps.map(function (a, j) {
+        return '<div class="app"><button type="button" class="iconpick" data-icon="' + j + '" aria-label="アイコンを選ぶ"><span class="mi">' + h(a[0]) + "</span></button>" +
+          '<select data-pick="' + j + '" aria-label="アプリを選ぶ"><option value="">' + h(a[1] || "アプリ") + "</option>" +
+          APPS.map(function (x, n) { return '<option value="' + n + '">' + h(x[1]) + "</option>"; }).join("") + '<option value="custom">手で入力…</option></select>' +
+          '<input type="text" class="mono" data-pkg="' + j + '" value="' + h(a[2]) + '" placeholder="パッケージ名"></div>' +
+          '<div class="app" style="margin-top:-4px"><span></span><input type="text" data-lbl="' + j + '" value="' + h(a[1]) + '" placeholder="表示名" style="grid-column:2/4"></div>';
+      }).join("") + "</div></div>";
+    html += '<div class="row" style="justify-content:space-between"><div class="row">' +
+      '<button type="button" class="iconbtn" data-move="-1" aria-label="上へ"' + (i === 0 || last ? " disabled" : "") + '><span class="mi">arrow_upward</span></button>' +
+      '<button type="button" class="iconbtn" data-move="1" aria-label="下へ"' + (i >= cfg.modes.length - 2 ? " disabled" : "") + '><span class="mi">arrow_downward</span></button>' +
+      '<button type="button" class="btn ghost" data-dup>複製</button></div>' +
+      '<button type="button" class="btn danger" data-del' + (last ? " disabled" : "") + ">削除</button></div>";
+    return html;
+  }
+
+  function hourOpts(v) {
+    var o = "";
+    for (var x = 0; x <= 24; x++) o += '<option value="' + x + '"' + (x === v ? " selected" : "") + ">" + x + "</option>";
+    return o;
+  }
+
+  function renderModes() {
+    $("modes").innerHTML = cfg.modes.map(function (m, i) {
+      return '<div class="mode" data-i="' + i + '" style="--m:' + h(m.color) + '"><button type="button" class="msum" data-toggle aria-expanded="' + (open === i) + '">' +
+        summaryHtml(m, i) + "</button>" + (open === i ? '<div class="mbody">' + bodyHtml(m, i) + "</div>" : "") + "</div>";
+    }).join("");
+  }
+
+  function refreshSummary(i) {
+    var el = document.querySelector('.mode[data-i="' + i + '"]');
+    if (!el) return;
+    el.style.setProperty("--m", cfg.modes[i].color);
+    el.querySelector(".msum").innerHTML = summaryHtml(cfg.modes[i], i);
+  }
+
+  function renderFlags() {
+    $("flags").innerHTML = Object.keys(cfg.flags).map(function (k) {
+      var f = cfg.flags[k], key = { wifi: "ssid", bt: "name", calendar: "title" }[f.type];
+      var main = '<input type="text" data-flag="' + h(k) + '" data-key="' + key + '" value="' + h(f[key]) + '" placeholder="' + h(FLAG_HINT[f.type]) + '">';
+      if (f.type === "calendar") {
+        main = '<div class="cal">' + main +
+          '<label class="f">予定の何分前から<input type="number" data-flag="' + h(k) + '" data-key="early" value="' + (f.early || 0) + '"></label>' +
+          '<label class="f">終了後何分まで<input type="number" data-flag="' + h(k) + '" data-key="late" value="' + (f.late || 0) + '"></label></div>';
+      }
+      return '<div class="flag"><div class="k">' + h(f.label) + "<small>" + h(k) + "</small></div>" + main + "</div>";
+    }).join("");
+  }
+
+  function renderErrs() {
+    var errs = G.validate(cfg);
+    var noPkg = {};
+    cfg.modes.forEach(function (m) {
+      m.apps.forEach(function (a) { if (!a[2] || a[2].indexOf(".") < 0) (noPkg[a[1]] = noPkg[a[1]] || []).push(m.label); });
+    });
+    var warn = Object.keys(noPkg).map(function (k) {
+      return "「" + k + "」はパッケージ名が無いので、タップしても開きません（" + noPkg[k].join("・") + "）";
+    });
+    $("errs").innerHTML = errs.map(function (e) { return "<li>" + h(e) + "</li>"; }).join("") +
+      warn.map(function (e) { return '<li style="color:#ffd60a">' + h(e) + "</li>"; }).join("");
+    $("push").disabled = errs.length > 0;
+  }
+
+  function renderAll() { renderModes(); renderFlags(); renderSim(); renderErrs(); }
+
+  // ---------------------------------------------------------------- 保存（この端末と GitHub）
+  var API = "https://api.github.com/repos/tmhys/my_apps/contents/apps/context-dock/config.json";
+  var sha = null, comment = null, token = "";
+
+  function setStatus(kind, text) { var s = $("status"); s.className = "status " + kind; s.querySelector("span").textContent = text; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function say(kind, text) { var m = $("msg"); m.className = "msg " + kind; m.textContent = text; }
+
+  function b64enc(str) {
+    var bytes = new TextEncoder().encode(str), bin = "";
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function b64dec(b64) {
+    var bin = atob(b64.replace(/\s/g, "")), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  // 編集はまずこの端末に下書きとして残す。GitHub に送るのは「保存」を押したときだけ。
+  function changed() {
+    dirty = true;
+    renderSim(); renderErrs();
+    lsSet("cd.draft", JSON.stringify({ cfg: cfg, sha: sha, comment: comment }));
+    setStatus("busy", token ? "未保存の変更あり" : "この端末にだけ保存");
+  }
+
+  async function gh(method, body) {
+    var headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+    if (body) headers["Content-Type"] = "application/json";
+    var r = await fetch(API + (method === "GET" ? "?ref=main&t=" + Date.now() : ""), { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw { status: r.status, message: j.message };
+    return j;
+  }
+
+  function errText(e) {
+    if (e && e.status === 401) return "トークンが無効です（期限切れか、貼り間違い）。";
+    if (e && e.status === 403) return "トークンに書き込み権限がありません（Contents: Read and write が必要）。";
+    if (e && e.status === 404) return "config.json が見つからないか、トークンの対象に tmhys/my_apps が入っていません。";
+    if (e && e.status === 409) return "GitHub 側が先に更新されています。「GitHub から読み直す」を押してから編集し直してください。";
+    return "通信に失敗しました（" + ((e && (e.status || e.message)) || e) + "）。";
+  }
+
+  async function load() {
+    if (!token) { setStatus("", "未接続"); return; }
+    setStatus("busy", "読み込み中");
+    try {
+      var j = await gh("GET");
+      var o = JSON.parse(b64dec(j.content));
+      sha = j.sha; comment = o._comment || null; delete o._comment;
+      cfg = o; dirty = false; open = -1;
+      lsSet("cd.draft", null);
+      renderAll(); setStatus("ok", "GitHub と同じ");
+    } catch (e) { setStatus("", "読み込めませんでした"); say("bad", errText(e)); }
+  }
+
+  async function push() {
+    if (G.validate(cfg).length) return;
+    if (!token) { say("bad", "下の「GitHub の接続」でトークンを入れてください。"); return; }
+    $("push").disabled = true; setStatus("busy", "保存中");
+    try {
+      var o = comment ? Object.assign({ _comment: comment }, cfg) : cfg;
+      var j = await gh("PUT", { message: "context-dock: エディタから設定を更新", branch: "main",
+        content: b64enc(JSON.stringify(o, null, 2) + "\n"), sha: sha || undefined });
+      sha = j.content.sha; dirty = false; lsSet("cd.draft", null);
+      setStatus("ok", "GitHub と同じ");
+      say("ok", "保存しました。1分ほどで Actions が作り直すので、そのあと Tasker で「ContextDock 更新」を実行してください。");
+    } catch (e) { setStatus("busy", "未保存の変更あり"); say("bad", errText(e)); }
+    renderErrs();
+  }
+
+  function download(name, data) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data]));
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  // ---------------------------------------------------------------- 操作
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("button");
+    if (!t) return;
+    var modeEl = t.closest(".mode"), i = modeEl ? +modeEl.dataset.i : -1, m = cfg.modes[i];
+    if (t.dataset.sim !== undefined) { sim.on[t.dataset.sim] = !sim.on[t.dataset.sim]; renderSim(); return; }
+    if (t.hasAttribute("data-toggle")) { open = open === i ? -1 : i; renderModes(); renderSim(); return; }
+    if (!m && !t.id) return;
+    if (t.dataset.color) { m.color = t.dataset.color; renderModes(); changed(); return; }
+    if (t.dataset.cond !== undefined) {
+      var k = t.dataset.cond, v = t.dataset.v;
+      m.all = (m.all || []).filter(function (x) { return x !== k; });
+      m.none = (m.none || []).filter(function (x) { return x !== k; });
+      if (v) m[v].push(k);
+      renderModes(); changed(); return;
+    }
+    if (t.dataset.icon !== undefined) { openIcons(i, +t.dataset.icon); return; }
+    if (t.dataset.move) {
+      var j = i + +t.dataset.move;
+      cfg.modes.splice(j, 0, cfg.modes.splice(i, 1)[0]); open = j; renderModes(); changed(); return;
+    }
+    if (t.hasAttribute("data-dup")) {
+      var c = clone(m); c.id = m.id + "2"; c.label = m.label + " 2";
+      if (isLast(i)) { c.all = []; c.none = []; }
+      cfg.modes.splice(i + (isLast(i) ? 0 : 1), 0, c); open = cfg.modes.indexOf(c); renderModes(); changed(); return;
+    }
+    if (t.hasAttribute("data-del")) { cfg.modes.splice(i, 1); open = -1; renderModes(); changed(); return; }
+  });
+
+  document.addEventListener("change", function (e) {
+    var t = e.target, modeEl = t.closest(".mode"), i = modeEl ? +modeEl.dataset.i : -1, m = cfg.modes[i];
+    if (t.id === "simhour") return;
+    if (t.dataset.pick !== undefined) {
+      var j = +t.dataset.pick;
+      if (t.value === "custom") { m.apps[j] = ["apps", "", ""]; }
+      else if (t.value !== "") { m.apps[j] = APPS[+t.value].slice(); }
+      renderModes(); changed(); return;
+    }
+    if (t.hasAttribute("data-hours")) { m.hours = t.checked ? [21, 4] : undefined; if (!m.hours) delete m.hours; renderModes(); changed(); return; }
+    if (t.dataset.h !== undefined) { m.hours[+t.dataset.h] = +t.value; refreshSummary(i); changed(); return; }
+  });
+
+  document.addEventListener("input", function (e) {
+    var t = e.target, modeEl = t.closest(".mode"), i = modeEl ? +modeEl.dataset.i : -1, m = cfg.modes[i];
+    if (t.id === "simhour") { sim.hour = +t.value; renderSim(); return; }
+    if (t.id === "iconQ") { renderIcons(); return; }
+    if (t.dataset.flag) {
+      var f = cfg.flags[t.dataset.flag];
+      f[t.dataset.key] = t.type === "number" ? (+t.value || 0) : t.value;
+      changed(); return;
+    }
+    if (!m) return;
+    if (t.dataset.f) {
+      m[t.dataset.f] = t.dataset.f === "id" ? t.value.replace(/[^A-Za-z0-9_]/g, "").toUpperCase() : t.value;
+      if (t.dataset.f === "id") t.value = m.id;
+      refreshSummary(i); changed(); return;
+    }
+    if (t.dataset.pkg !== undefined) { m.apps[+t.dataset.pkg][2] = t.value.trim(); changed(); return; }
+    if (t.dataset.lbl !== undefined) { m.apps[+t.dataset.lbl][1] = t.value; refreshSummary(i); changed(); return; }
+  });
+
+  $("addmode").addEventListener("click", function () {
+    var n = cfg.modes.length, id = "MODE" + n;
+    cfg.modes.splice(n - 1, 0, { id: id, label: "NEW", color: "#64D2FF", all: [], none: [],
+      apps: clone(cfg.modes[n - 1].apps) });
+    open = n - 1; renderModes(); changed();
+    var el = document.querySelector('.mode[data-i="' + open + '"]'); if (el) el.scrollIntoView({ block: "center" });
+  });
+
+  // アイコン選択
+  var picking = null;
+  function openIcons(i, j) { picking = [i, j]; $("iconQ").value = ""; renderIcons(); $("iconDlg").showModal(); }
+  function renderIcons() {
+    var q = $("iconQ").value.trim().toLowerCase();
+    $("icons").innerHTML = ICONS.filter(function (n) { return !q || n.indexOf(q) >= 0; }).map(function (n) {
+      return '<button type="button" data-ic="' + n + '"><span class="mi">' + n + "</span><small>" + n + "</small></button>";
+    }).join("");
+  }
+  $("icons").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-ic]"); if (!b || !picking) return;
+    cfg.modes[picking[0]].apps[picking[1]][0] = b.dataset.ic;
+    $("iconDlg").close(); renderModes(); changed();
+  });
+  $("iconClose").addEventListener("click", function () { $("iconDlg").close(); });
+
+  // 出力
+  $("push").addEventListener("click", push);
+  $("reload").addEventListener("click", function () {
+    if (dirty && !window.confirm("この端末の未保存の変更を捨てて、GitHub の内容を読み直しますか？")) return;
+    load();
+  });
+  $("dlxml").addEventListener("click", function () { if (!G.validate(cfg).length) download("ContextDock.prj.xml", G.buildXml(cfg)); });
+  $("dlkwgt").addEventListener("click", function () { if (!G.validate(cfg).length) download("ContextDock.kwgt", G.buildKwgt(cfg)); });
+  $("saveToken").addEventListener("click", function () {
+    token = $("token").value.trim(); lsSet("cd.token", token || null);
+    say("", ""); load();
+  });
+  $("forget").addEventListener("click", function () {
+    token = ""; $("token").value = ""; lsSet("cd.token", null); setStatus("", "未接続");
+    say("ok", "この端末からトークンを消しました。");
+  });
+
+  // ---------------------------------------------------------------- 起動
+  token = lsGet("cd.token") || "";
+  $("token").value = token;
+  var draft = null;
+  try { draft = JSON.parse(lsGet("cd.draft") || "null"); } catch (_) {}
+  if (draft && draft.cfg) {
+    // 前回 GitHub に送っていない変更があれば、そちらを優先して見せる
+    cfg = draft.cfg; sha = draft.sha || null; comment = draft.comment || null; dirty = true;
+    renderAll(); setStatus("busy", token ? "未保存の変更あり（前回の続き）" : "この端末にだけ保存");
+  } else {
+    renderAll(); load();
+  }
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+})();
+</script>
+</body>
+</html>
