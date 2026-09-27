@@ -294,7 +294,8 @@
     var lbl = "S.org.kustom.intent.label=" + encodeURIComponent(label) + ";end";
     var intent = t.cls
       ? "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;" +
-        "component=" + pkg + "/" + t.cls + ";" + lbl
+        // KWGT と同じく "$" などは %24 の形に符号化する（Intent.parseUri が元に戻す）
+        "component=" + encodeURIComponent(pkg) + "/" + encodeURIComponent(t.cls) + ";" + lbl
       : "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;" +
         "launchFlags=0x10000000;package=" + pkg + ";" + lbl;
     return [{ action: "LAUNCH_APP", intent: intent, type: "SINGLE_TAP" }];
@@ -541,8 +542,11 @@
   /** KWGT が書き出した preset.json から、タッチ動作に入っている「パッケージ名/起動画面」を拾う。
    *  KWGT の編集画面でアプリを選び直してから書き出せば、Shizuku などなしで起動画面が分かる。 */
   function activitiesFromPreset(presetText) {
-    var lines = [], re = /component=([A-Za-z][\w.]*\/[\w.$]+)/g, m;
-    while ((m = re.exec(presetText))) if (lines.indexOf(m[1]) < 0) lines.push(m[1]);
+    var lines = [], re = /component=([A-Za-z][\w.]*\/[\w.$%]+)/g, m;
+    while ((m = re.exec(presetText))) {
+      var c = decodeURIComponent(m[1]); // KWGT は "$" を %24 で書く（例: Shell%24HomeActivity）
+      if (lines.indexOf(c) < 0) lines.push(c);
+    }
     return lines.join("\n");
   }
 
