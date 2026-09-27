@@ -80,6 +80,8 @@
         if (/[;|]/.test(a[1] || "")) errs.push(name + ": 表示名「" + a[1] + "」に ; | は使えません");
         if (!a[0]) errs.push(name + ": アイコンが空のアプリがあります");
         if (/\n/.test(a[2] || "")) errs.push(name + ": 起動先に改行は使えません");
+        if (a[2] && a[2].indexOf("://") < 0 && !/^[A-Za-z][\w.]*(\/[\w.$]+)?$/.test(a[2]))
+          errs.push(name + ": 起動先「" + a[2] + "」の書き方が違います（パッケージ名/起動画面）");
       });
       (m.all || []).concat(m.none || []).forEach(function (f) {
         if (!(f in cfg.flags)) errs.push(name + ": 未定義の条件「" + f + "」");
@@ -194,7 +196,7 @@
   var SLOT_JS = [
     "var t = String(global('CTXTARGETS')).split('\\n')[__N__] || '';",
     "if (t.indexOf('://') > 0) browseURL(t);",
-    "else if (t) loadApp(t, '', false);",
+    "else if (t) loadApp(t.split('/')[0], '', false);",
     ""
   ].join("\n");
 
@@ -273,16 +275,29 @@
     return h.length === 6 ? "#FF" + h : "#" + h;
   }
 
-  /** パッケージ名だけでランチャー画面を開く intent。クラス名は端末で変わりうるので書かない。 */
-  function launch(pkg, label) {
+  /** 起動先（"パッケージ名/起動画面" か "パッケージ名"）を分ける。
+   *  起動画面は `cmd package resolve-activity` の出力と同じ書き方で、".Main" のような省略形も受ける。 */
+  function splitTarget(target) {
+    var t = String(target || ""), at = t.indexOf("/");
+    if (t.indexOf("://") >= 0 || at < 0) return { pkg: t, cls: "" };
+    var pkg = t.slice(0, at), cls = t.slice(at + 1);
+    return { pkg: pkg, cls: cls.charAt(0) === "." ? pkg + cls : cls };
+  }
+
+  /** タップでアプリを開く KWGT のタッチ動作。
+   *  KWGT はパッケージ名だけの intent では起動できない（実機で確認）。KWGT が一覧から選んだときに
+   *  自分で書くのと同じ形（component=パッケージ名/起動画面）にする。起動画面が分からないものは
+   *  従来のパッケージ名だけの形で書き、エディタが警告を出す。 */
+  function launch(target, label) {
+    var t = splitTarget(target), pkg = t.pkg;
     if (!pkg || pkg.indexOf(".") < 0 || pkg.indexOf("://") >= 0) return [];
-    return [{
-      action: "LAUNCH_APP",
-      intent: "intent:#Intent;action=android.intent.action.MAIN;" +
-              "category=android.intent.category.LAUNCHER;launchFlags=0x10000000;" +
-              "package=" + pkg + ";S.org.kustom.intent.label=" + encodeURIComponent(label) + ";end",
-      type: "SINGLE_TAP"
-    }];
+    var lbl = "S.org.kustom.intent.label=" + encodeURIComponent(label) + ";end";
+    var intent = t.cls
+      ? "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;" +
+        "component=" + pkg + "/" + t.cls + ";" + lbl
+      : "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;" +
+        "launchFlags=0x10000000;package=" + pkg + ";" + lbl;
+    return [{ action: "LAUNCH_APP", intent: intent, type: "SINGLE_TAP" }];
   }
 
   function tile(app, color) {
@@ -489,8 +504,44 @@
     ]);
   }
 
+  /** 起動画面が分かっていない起動先（KWGT のタップで開けないもの）のパッケージ名一覧。 */
+  function missingActivities(cfg) {
+    var out = [];
+    cfg.modes.forEach(function (m) {
+      m.apps.forEach(function (a) {
+        var t = splitTarget(a[2]);
+        if (t.pkg && !t.cls && t.pkg.indexOf("://") < 0 && out.indexOf(t.pkg) < 0) out.push(t.pkg);
+      });
+    });
+    return out;
+  }
+
+  /** 端末で起動画面を調べるシェルのコマンド（Shizuku + aShell や adb shell で実行する）。 */
+  function resolveCommand(pkgs) {
+    return "for p in " + pkgs.join(" ") + "; do cmd package resolve-activity --brief -c android.intent.category.LAUNCHER $p | tail -n 1; done";
+  }
+
+  /** 上のコマンドの出力を読み、該当する起動先に起動画面を書き足す。書き足した数を返す。 */
+  function applyActivities(cfg, text) {
+    var found = {};
+    String(text).split(/\r?\n/).forEach(function (line) {
+      var m = line.trim().match(/^([A-Za-z][\w.]*)\/([\w.$]+)$/);
+      if (m) found[m[1]] = m[1] + "/" + m[2];
+    });
+    var n = 0;
+    cfg.modes.forEach(function (mode) {
+      mode.apps.forEach(function (a) {
+        var t = splitTarget(a[2]);
+        if (found[t.pkg] && a[2] !== found[t.pkg]) { a[2] = found[t.pkg]; n++; }
+      });
+    });
+    return { updated: n, found: found };
+  }
+
   var api = {
     activeFlags: activeFlags, taskerModes: taskerModes, validate: validate, judge: judge,
+    splitTarget: splitTarget, missingActivities: missingActivities,
+    resolveCommand: resolveCommand, applyActivities: applyActivities,
     buildXml: buildXml, buildPreset: buildPreset, buildKwgt: buildKwgt, buildBundle: buildBundle,
     JUDGE_JS: JUDGE_JS
   };

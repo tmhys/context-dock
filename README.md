@@ -22,6 +22,13 @@ SSID・BT 名などの設定データ（`config.json`）は非公開の `tmhys/m
   → Tasker で Import Project（KWGT はプリセットを選び直すだけ）
 ```
 
+## 起動先の書き方
+
+KWGT はパッケージ名だけではアプリを起動できない（実機で確認）。起動先は
+`パッケージ名/起動画面`（`cmd package resolve-activity --brief -c android.intent.category.LAUNCHER <pkg>`
+の出力と同じ形）で書く。エディタの「起動画面の名前」欄が、足りないアプリの分だけ
+このコマンドを作り、出力を貼れば全モードにまとめて反映する（Shizuku + aShell でスマホだけで調べられる）。
+
 ## ファイル
 
 | ファイル | 中身 |

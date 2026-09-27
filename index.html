@@ -29,7 +29,7 @@ p{margin:0 0 8px}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input[type=text],input[type=number],select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
+input[type=text],input[type=number],input[type=password],textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
 input.mono{font-family:var(--mono);font-size:12.5px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 .btn{background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
@@ -175,6 +175,22 @@ dialog::backdrop{background:#000a}
           <button class="btn" id="dlkwgt" type="button">ContextDock.kwgt</button>
         </div>
       </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>起動画面の名前 <small>KWGT のタップで開くのに必要</small></h2>
+    <div class="flags">
+      <p class="muted" id="actStatus"></p>
+      <ol class="steps">
+        <li>Shizuku を起動した状態で aShell を開く（PC なら adb shell でも同じ）</li>
+        <li>「コマンドをコピー」→ aShell に貼って実行</li>
+        <li>出てきた行を全部コピーして下に貼り、「反映」→「GitHub に保存」</li>
+      </ol>
+      <div class="row"><button class="btn" id="copyCmd" type="button"><span class="mi" style="font-size:18px">content_copy</span>コマンドをコピー</button></div>
+      <textarea id="actPaste" rows="5" class="mono" spellcheck="false" placeholder="com.example.app/.MainActivity のような行をそのまま貼る"></textarea>
+      <div class="row"><button class="btn" id="applyAct" type="button">反映</button></div>
+      <div class="msg" id="actMsg"></div>
     </div>
   </section>
 
@@ -381,6 +397,9 @@ dialog::backdrop{background:#000a}
     var warn = Object.keys(noPkg).map(function (k) {
       return "「" + k + "」はパッケージ名が無いので、タップしても開きません（" + noPkg[k].join("・") + "）";
     });
+    var noAct = G.missingActivities(cfg).filter(function (p) { return p.indexOf(".") >= 0; });
+    if (noAct.length) warn.push("起動画面の名前がないアプリが " + noAct.length + " 個あります。KWGT のタップで開けないので、下の「起動画面の名前」で調べてください");
+    $("actStatus").textContent = noAct.length ? "未設定: " + noAct.join(", ") : "すべてのアプリに起動画面の名前が入っています。";
     $("errs").innerHTML = errs.map(function (e) { return "<li>" + h(e) + "</li>"; }).join("") +
       warn.map(function (e) { return '<li style="color:#ffd60a">' + h(e) + "</li>"; }).join("");
     $("push").disabled = errs.length > 0;
@@ -570,6 +589,25 @@ dialog::backdrop{background:#000a}
   });
   $("dlxml").addEventListener("click", function () { if (!G.validate(cfg).length) download("ContextDock.prj.xml", G.buildXml(cfg)); });
   $("dlkwgt").addEventListener("click", function () { if (!G.validate(cfg).length) download("ContextDock.kwgt", G.buildKwgt(cfg)); });
+  $("copyCmd").addEventListener("click", function () {
+    var pkgs = G.missingActivities(cfg).filter(function (p) { return p.indexOf(".") >= 0; });
+    var m = $("actMsg");
+    if (!pkgs.length) { m.className = "msg ok"; m.textContent = "調べる必要のあるアプリはありません。"; return; }
+    var cmd = G.resolveCommand(pkgs);
+    try {
+      navigator.clipboard.writeText(cmd).then(function () { m.className = "msg ok"; m.textContent = pkgs.length + " 個ぶんのコマンドをコピーしました。"; },
+        function () { $("actPaste").value = cmd; m.className = "msg bad"; m.textContent = "コピーできなかったので、下の欄に入れました。長押しでコピーしてください。"; });
+    } catch (e) { $("actPaste").value = cmd; m.className = "msg bad"; m.textContent = "コピーできなかったので、下の欄に入れました。"; }
+  });
+  $("applyAct").addEventListener("click", function () {
+    var r = G.applyActivities(cfg, $("actPaste").value), m = $("actMsg");
+    // アプリ一覧にも覚えさせて、次に一覧から選んだときも起動画面付きになるようにする
+    APPS.forEach(function (a) { var t = G.splitTarget(a[2]); if (r.found[t.pkg]) a[2] = r.found[t.pkg]; });
+    if (!r.updated) { m.className = "msg bad"; m.textContent = "反映できる行が見つかりませんでした。「パッケージ名/起動画面」の行をそのまま貼ってください。"; return; }
+    $("actPaste").value = ""; renderModes(); changed();
+    m.className = "msg ok"; m.textContent = r.updated + " か所に反映しました。「GitHub に保存」を押すと KWGT のプリセットに入ります。";
+  });
+
   $("saveToken").addEventListener("click", function () {
     token = $("token").value.trim(); lsSet("cd.token", token || null);
     say("", ""); load();
