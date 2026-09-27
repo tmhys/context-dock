@@ -526,7 +526,7 @@
     var found = {};
     String(text).split(/\r?\n/).forEach(function (line) {
       var m = line.trim().match(/^([A-Za-z][\w.]*)\/([\w.$]+)$/);
-      if (m) found[m[1]] = m[1] + "/" + m[2];
+      if (m && !found[m[1]]) found[m[1]] = m[1] + "/" + m[2]; // 同じアプリが複数あれば最初のもの
     });
     var n = 0;
     cfg.modes.forEach(function (mode) {
@@ -538,10 +538,18 @@
     return { updated: n, found: found };
   }
 
+  /** KWGT が書き出した preset.json から、タッチ動作に入っている「パッケージ名/起動画面」を拾う。
+   *  KWGT の編集画面でアプリを選び直してから書き出せば、Shizuku などなしで起動画面が分かる。 */
+  function activitiesFromPreset(presetText) {
+    var lines = [], re = /component=([A-Za-z][\w.]*\/[\w.$]+)/g, m;
+    while ((m = re.exec(presetText))) if (lines.indexOf(m[1]) < 0) lines.push(m[1]);
+    return lines.join("\n");
+  }
+
   var api = {
     activeFlags: activeFlags, taskerModes: taskerModes, validate: validate, judge: judge,
     splitTarget: splitTarget, missingActivities: missingActivities,
-    resolveCommand: resolveCommand, applyActivities: applyActivities,
+    resolveCommand: resolveCommand, applyActivities: applyActivities, activitiesFromPreset: activitiesFromPreset,
     buildXml: buildXml, buildPreset: buildPreset, buildKwgt: buildKwgt, buildBundle: buildBundle,
     JUDGE_JS: JUDGE_JS
   };

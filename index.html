@@ -188,6 +188,9 @@ dialog::backdrop{background:#000a}
         <li>出てきた行を全部コピーして下に貼り、「反映」→「GitHub に保存」</li>
       </ol>
       <div class="row"><button class="btn" id="copyCmd" type="button"><span class="mi" style="font-size:18px">content_copy</span>コマンドをコピー</button></div>
+      <p class="muted" style="margin:6px 0 0">Shizuku を使わない方法：KWGT の編集画面で、未設定のアプリをどれかのタイルで一度ずつ選び直してからプリセットを書き出し、その .kwgt をここで読み込む。</p>
+      <label class="btn" style="width:max-content"><span class="mi" style="font-size:18px">upload_file</span>KWGT のプリセット（.kwgt）から読み込む
+        <input type="file" id="kwgtFile" accept=".kwgt,.zip,application/zip,application/octet-stream" hidden></label>
       <textarea id="actPaste" rows="5" class="mono" spellcheck="false" placeholder="com.example.app/.MainActivity のような行をそのまま貼る"></textarea>
       <div class="row"><button class="btn" id="applyAct" type="button">反映</button></div>
       <div class="msg" id="actMsg"></div>
@@ -599,6 +602,39 @@ dialog::backdrop{background:#000a}
         function () { $("actPaste").value = cmd; m.className = "msg bad"; m.textContent = "コピーできなかったので、下の欄に入れました。長押しでコピーしてください。"; });
     } catch (e) { $("actPaste").value = cmd; m.className = "msg bad"; m.textContent = "コピーできなかったので、下の欄に入れました。"; }
   });
+  // .kwgt（ZIP）から preset.json を取り出す。KWGT の書き出しは deflate 圧縮なので、ブラウザ標準の展開を使う
+  async function presetFromKwgt(buf) {
+    var v = new DataView(buf), eocd = -1;
+    for (var i = buf.byteLength - 22; i >= 0; i--) if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error("ZIP ではありません");
+    var n = v.getUint16(eocd + 10, true), off = v.getUint32(eocd + 16, true);
+    for (var k = 0; k < n; k++) {
+      var method = v.getUint16(off + 10, true), size = v.getUint32(off + 20, true);
+      var nameLen = v.getUint16(off + 28, true), extra = v.getUint16(off + 30, true), cmt = v.getUint16(off + 32, true);
+      var local = v.getUint32(off + 42, true);
+      var name = new TextDecoder().decode(new Uint8Array(buf, off + 46, nameLen));
+      if (name === "preset.json") {
+        var start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+        var data = new Uint8Array(buf, start, size);
+        if (method === 0) return new TextDecoder().decode(data);
+        var stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+        return await new Response(stream).text();
+      }
+      off += 46 + nameLen + extra + cmt;
+    }
+    throw new Error("preset.json が見つかりません");
+  }
+  $("kwgtFile").addEventListener("change", async function (e) {
+    var f = e.target.files[0], m = $("actMsg");
+    if (!f) return;
+    try {
+      var text = G.activitiesFromPreset(await presetFromKwgt(await f.arrayBuffer()));
+      if (!text) { m.className = "msg bad"; m.textContent = "起動画面の入ったタイルが見つかりませんでした。KWGT でアプリを選び直してから書き出してください。"; return; }
+      $("actPaste").value = text; $("applyAct").click();
+    } catch (err) { m.className = "msg bad"; m.textContent = "読み込めませんでした（" + err.message + "）"; }
+    e.target.value = "";
+  });
+
   $("applyAct").addEventListener("click", function () {
     var r = G.applyActivities(cfg, $("actPaste").value), m = $("actMsg");
     // アプリ一覧にも覚えさせて、次に一覧から選んだときも起動画面付きになるようにする
