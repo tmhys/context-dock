@@ -268,6 +268,17 @@
   var TILE_SIZE = "$" + SIDE + "$";
   var ICON_SIZE = "$" + SIDE + "*0.38$";
   var LABEL_SIZE = "$" + SIDE + "*0.15$";
+  // ヘッダー（モード名）をタップすると開くエディタ。ホーム画面に追加していれば、そのアプリで開く
+  var EDITOR_URL = "https://tmhys.github.io/context-dock/";
+  function openEditor() {
+    var u = EDITOR_URL.replace(/^https:\/\//, "");
+    return [{
+      action: "LAUNCH_ACTIVITY",
+      intent: "intent://" + u + "#Intent;scheme=https;action=android.intent.action.VIEW;" +
+              "S.org.kustom.intent.label=" + encodeURIComponent("Context Dock エディタ") + ";end",
+      type: "SINGLE_TAP"
+    }];
+  }
   var HEAD_OF_CTX = 'tc(split, br(' + SOURCE + ', ctx), "|", 0)';
 
   function argb(hex) {
@@ -354,6 +365,9 @@
         {
           internal_type: "StackLayerModule", internal_title: "Header",
           config_stacking: "HORIZONTAL_CENTER", config_margin: 6,
+          // 上下に余白を足して、指で押しやすくする
+          position_padding_top: 4, position_padding_bottom: 4, position_padding_left: 12, position_padding_right: 12,
+          internal_events: openEditor(),
           viewgroup_items: [
             { internal_type: "ShapeModule", internal_title: "Dot", shape_type: "CIRCLE",
               shape_width: 6, shape_height: 6, paint_color: argb(m.color) },
