@@ -200,7 +200,10 @@
     ""
   ].join("\n");
 
-  function buildXml(cfg) {
+  /** opts.extraKwgt: 「ContextDock 更新」で一緒に取ってくる他の .kwgt（my_apps 内のパス）。
+   *  Kustom/widgets/ に同じファイル名で保存する。my_apps の Actions が自作ウィジェットの一覧を渡す。 */
+  function buildXml(cfg, opts) {
+    var extraKwgt = (opts && opts.extraKwgt) || [];
     var flags = activeFlags(cfg);
     var modes = taskerModes(cfg);
     var tasks = [], profiles = [], tid = 100, pid = 1;
@@ -227,9 +230,16 @@
       httpGet("https://api.github.com/repos/" + REPO + "/contents/" + PRJ_PATH + "?ref=main", rawHeaders, SAVE_TO),
       flash(SAVE_TO + " に保存 (%http_response_code)"),
       httpGet("https://api.github.com/repos/" + REPO + "/contents/" + KWGT_PATH + "?ref=main", rawHeaders, KWGT_SAVE_TO),
-      flash(KWGT_SAVE_TO + " に保存 (%http_response_code)"),
+      flash(KWGT_SAVE_TO + " に保存 (%http_response_code)")
+    ].concat([].concat.apply([], extraKwgt.map(function (p) {
+      var to = "Kustom/widgets/" + p.split("/").pop();
+      return [
+        httpGet("https://api.github.com/repos/" + REPO + "/contents/" + p + "?ref=main", rawHeaders, to),
+        flash(to + " に保存 (%http_response_code)")
+      ];
+    }))).concat([
       launchApp(FILES_PKG, FILES_CLS, "Files")
-    ]);
+    ]));
 
     Object.keys(flags).forEach(function (k) {
       var f = flags[k], v = "%CTX_" + k;
@@ -536,9 +546,9 @@
   }
 
   /** スマホで1回保存すれば済むよう、XML と .kwgt を1つの ZIP にまとめる。 */
-  function buildBundle(cfg, theme) {
+  function buildBundle(cfg, theme, opts) {
     return zip([
-      { name: PROJECT + ".prj.xml", data: utf8(buildXml(cfg)) },
+      { name: PROJECT + ".prj.xml", data: utf8(buildXml(cfg, opts)) },
       { name: PROJECT + ".kwgt", data: buildKwgt(cfg, theme) }
     ]);
   }
