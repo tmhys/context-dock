@@ -261,7 +261,25 @@
   // ------------------------------------------------------------ KWGT プリセット
 
   var SOURCE = "Tasker"; // $br(Tasker, ctx)$ の第1引数。プラグインが名乗る送り主の名前
-  var BG = "#FF1C1C1E", TILE = "#FF2A2A2D", LABEL = "#FFC7C7CC", MUTED = "#FF8E8E93";
+  // 色・角丸・フォント。既定はホーム画面の他のウィジェット（天気の背景 #222222）に合わせた値。
+  // my_apps の Actions は共通テーマ（apps/widget-theme/theme.json）とフォントを theme で渡す
+  var THEME = { bg: "#FF222222", tile: "#FF2E2E2E", label: "#FFC8C8C8", muted: "#FF808080", corners: 28 };
+  var BG, TILE, LABEL, MUTED, CORNERS, FONT;
+  /** theme（省略可）を既定に重ねて使う。fontFile があれば .kwgt に同梱したフォントを文字に使う。 */
+  function useTheme(theme) {
+    var t = {}, k;
+    for (k in THEME) t[k] = THEME[k];
+    for (k in theme || {}) t[k] = theme[k];
+    BG = t.bg; TILE = t.tile; LABEL = t.label; MUTED = t.muted; CORNERS = t.corners;
+    FONT = t.fontFile && t.fontData ? "kfile://org.kustom.provider/fonts/" + t.fontFile : "";
+    return t;
+  }
+  useTheme();
+  /** 同梱フォントがあるときだけ text_family を付ける。 */
+  function withFont(m) {
+    if (FONT) m.text_family = FONT;
+    return m;
+  }
   var PAD = 14, GAP = 10, HEAD = 16;
   // 大きさはウィジェットの実寸から数式で決める。2×2 以外に置いても崩れない。
   var SIDE = "mu(min, (si(rwidth)-" + (PAD * 2 + GAP) + ")/2, (si(rheight)-" + (PAD * 2 + GAP * 2 + HEAD) + ")/2)";
@@ -334,11 +352,11 @@
               paint_color: argb(color),
               internal_toggles: { icon_size: 10 }, internal_formulas: { icon_size: ICON_SIZE }
             },
-            {
+            withFont({
               internal_type: "TextModule", internal_title: "Label", text_expression: label,
               text_size: 10, text_align: "CENTER", paint_color: LABEL,
               internal_toggles: { text_size: 10 }, internal_formulas: { text_size: LABEL_SIZE }
-            }
+            })
           ]
         }
       ]
@@ -371,8 +389,8 @@
           viewgroup_items: [
             { internal_type: "ShapeModule", internal_title: "Dot", shape_type: "CIRCLE",
               shape_width: 6, shape_height: 6, paint_color: argb(m.color) },
-            { internal_type: "TextModule", internal_title: "Mode", text_expression: m.label,
-              text_size: 11, paint_color: MUTED }
+            withFont({ internal_type: "TextModule", internal_title: "Mode", text_expression: m.label,
+              text_size: 11, paint_color: MUTED })
           ]
         },
         row(m.apps.slice(0, 2), m.color),
@@ -382,7 +400,8 @@
   }
 
   /** KWGT には全モードを入れる。フラグ未設定のモードは Tasker が選ばないので出てこないだけ。 */
-  function buildPreset(cfg) {
+  function buildPreset(cfg, theme) {
+    useTheme(theme);
     var modes = cfg.modes;
     return {
       preset_info: {
@@ -394,7 +413,7 @@
         internal_type: "RootLayerModule",
         viewgroup_items: [{
           internal_type: "ShapeModule", internal_title: "Background", shape_type: "RECT",
-          shape_width: 400, shape_height: 400, shape_corners: 28, paint_color: BG,
+          shape_width: 400, shape_height: 400, shape_corners: CORNERS, paint_color: BG,
           internal_toggles: { shape_width: 10, shape_height: 10 },
           internal_formulas: { shape_width: "$si(rwidth)$", shape_height: "$si(rheight)$" }
         }].concat(modes.map(function (m, n) { return modeGroup(m, n === modes.length - 1); }))
@@ -475,7 +494,8 @@
 
   /** 一覧に出す小さな絵。拡張子は jpg だが Android は中身（PNG）で読む。 */
   function thumbnail(color) {
-    var size = 120, bg = [0x1C, 0x1C, 0x1E], tl = [0x2A, 0x2A, 0x2D];
+    function rgb(argbHex) { return [3, 5, 7].map(function (k) { return parseInt(argbHex.slice(k, k + 2), 16); }); }
+    var size = 120, bg = rgb(BG), tl = rgb(TILE);
     var h = (color || "#FF6B1A").replace("#", "");
     var dot = [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
     var t = (size - 2 * 12 - 8) >> 1;
@@ -502,20 +522,24 @@
                    chunk("IHDR", ihdr), chunk("IDAT", zlibStored(raw)), chunk("IEND", new Uint8Array(0))]);
   }
 
-  function buildKwgt(cfg) {
+  /** theme.fontFile と theme.fontData（Uint8Array）があれば fonts/ に同梱する。 */
+  function buildKwgt(cfg, theme) {
+    var preset = buildPreset(cfg, theme); // ここで theme が効く（サムネイルの色も）
     var thumb = thumbnail(cfg.modes[0] && cfg.modes[0].color);
-    return zip([
-      { name: "preset.json", data: utf8(JSON.stringify(buildPreset(cfg), null, 1)) },
+    var files = [
+      { name: "preset.json", data: utf8(JSON.stringify(preset, null, 1)) },
       { name: "preset_thumb_portrait.jpg", data: thumb },
       { name: "preset_thumb_landscape.jpg", data: thumb }
-    ]);
+    ];
+    if (FONT) files.push({ name: "fonts/" + theme.fontFile, data: theme.fontData });
+    return zip(files);
   }
 
   /** スマホで1回保存すれば済むよう、XML と .kwgt を1つの ZIP にまとめる。 */
-  function buildBundle(cfg) {
+  function buildBundle(cfg, theme) {
     return zip([
       { name: PROJECT + ".prj.xml", data: utf8(buildXml(cfg)) },
-      { name: PROJECT + ".kwgt", data: buildKwgt(cfg) }
+      { name: PROJECT + ".kwgt", data: buildKwgt(cfg, theme) }
     ]);
   }
 
